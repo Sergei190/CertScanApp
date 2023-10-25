@@ -11,7 +11,7 @@ public class Main {
 
     public static void main(String[] args) {
         DomainExtractor domainExtractor = new SSLCertDomainExtractor();
-        DomainWriter domainWriter = new TextFileDomainWriter("domains.txt");
+        DomainWriter domainWriter = new TextFileDomainWriter("index.html");
         IPScanner ipScanner = new IPScanner();
 
         SSLScanner sslScanner = new SSLScanner(domainExtractor, domainWriter, ipScanner);

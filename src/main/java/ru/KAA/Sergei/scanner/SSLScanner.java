@@ -1,20 +1,16 @@
 package ru.KAA.Sergei.scanner;
 
 import io.javalin.Javalin;
-import io.javalin.http.staticfiles.StaticFileConfig;
-import ru.KAA.Sergei.configuration.StaticFilesConfiguration;
 import ru.KAA.Sergei.exstractor.DomainExtractor;
 import ru.KAA.Sergei.writer.DomainWriter;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.Files;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Consumer;
 
 public class SSLScanner {
     private final DomainExtractor domainExtractor;
@@ -28,29 +24,26 @@ public class SSLScanner {
     }
 
     public void start() {
-        Javalin app = Javalin.create(config -> {
-            StaticFilesConfiguration staticFiles = new StaticFilesConfiguration();
-            staticFiles.setStaticFilesPath("/templates"); // Указываем путь к папке с шаблонами
-            staticFiles.setStaticFilesLocation("/resources"); // Указываем путь к ресурсам
-            config.enableWebjars(); // Включаем поддержку WebJars
-            config.addStaticFiles((Consumer<StaticFileConfig>) staticFiles);
-        }).start(8080);
+        Javalin app = Javalin.create().start(7000);
+
+        app.get("/index.html", ctx -> {
+            // Read the file content and send it as the response
+            Path filePath = Paths.get("index.html");
+            ctx.result(new String(Files.readAllBytes(filePath)));
+        });
 
         app.get("/scan", ctx -> {
             String ipRange = ctx.queryParam("range");
             int threads = Integer.parseInt(ctx.queryParam("threads"));
 
             ExecutorService executor = Executors.newFixedThreadPool(threads);
-            List<String> domains = new ArrayList<>();
 
             for (String ipAddress : ipScanner.scanIPRange(ipRange)) {
                 executor.execute(() -> {
                     try {
                         String domain = domainExtractor.extractDomain(ipAddress);
                         if (domain != null) {
-                            synchronized (domains) {
-                                domains.add(domain);
-                            }
+                            domainWriter.saveDomain(domain);
                         }
                     } catch (IOException e) {
                         e.printStackTrace();
@@ -65,26 +58,7 @@ public class SSLScanner {
                 e.printStackTrace();
             }
 
-            StringBuilder result = new StringBuilder();
-            for (String domain : domains) {
-                result.append(domain).append(",");
-            }
-            if (result.length() > 0) {
-                result.deleteCharAt(result.length() - 1); // Удаляем последнюю запятую
-
-                ctx.redirect("/result?domains=" + result);
-            } else {
-                ctx.redirect("/result");
-            }
-        });
-
-        app.get("/result", ctx -> {
-            String domains = ctx.queryParam("domains");
-
-            Map<String, Object> model = new HashMap<>();
-            model.put("result", domains);
-
-            ctx.render("/templates/result.html", model);
+            ctx.result("Scanning complete");
         });
     }
 }
